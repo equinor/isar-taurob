@@ -1,0 +1,95 @@
+{
+    "name": "level1",
+    "map_from": {
+        "name": "level1_robot",
+        "reference_positions": {
+            "positions": [
+                {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "frame": {
+                        "name": "robot"
+                    }
+                },
+                {
+                    "x": 1,
+                    "y": 1,
+                    "z": 0,
+                    "frame": {
+                        "name": "robot"
+                    }
+                },
+                {
+                    "x": 2,
+                    "y": 2,
+                    "z": 0,
+                    "frame": {
+                        "name": "robot"
+                    }
+                }
+            ],
+            "frame": {
+                "name": "robot"
+            }
+        },
+        "frame": {
+            "name": "robot"
+        }
+    },
+    "map_to": {
+        "name": "level1_asset",
+        "reference_positions": {
+            "positions": [
+                {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "frame": {
+                        "name": "asset"
+                    }
+                },
+                {
+                    "x": 1,
+                    "y": 1,
+                    "z": 0,
+                    "frame": {
+                        "name": "asset"
+                    }
+                },
+                {
+                    "x": 2,
+                    "y": 2,
+                    "z": 0,
+                    "frame": {
+                        "name": "asset"
+                    }
+                }
+            ],
+            "frame": {
+                "name": "asset"
+            }
+        },
+        "frame": {
+            "name": "asset"
+        },
+        "bounds": {
+            "position1": {
+                "x": 100000,
+                "y": 100000,
+                "z": 100000,
+                "frame": {
+                    "name": "asset"
+                }
+            },
+            "position2": {
+                "x": 20000,
+                "y": 20000,
+                "z": 20000,
+                "frame": {
+                    "name": "asset"
+                }
+            }
+        }
+    }
+}

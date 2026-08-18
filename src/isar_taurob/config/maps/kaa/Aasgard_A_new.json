@@ -1,0 +1,111 @@
+{
+  "name": "Aasgard_A_new",
+  "map_from": {
+    "name": "Aasgard_A_new_robot",
+    "reference_positions": {
+      "positions": [
+        {
+          "x": 10.514,
+          "y": 28.205,
+          "z": 0.00,
+          "frame": {
+            "name": "robot"
+          }
+        },
+        {
+          "x": 24.728,
+          "y": 12.815,
+          "z": 0.0,
+          "frame": {
+            "name": "robot"
+          }
+        },
+        {
+          "x": 37.459,
+          "y": 33.899,
+          "z": 0.0,
+          "frame": {
+            "name": "robot"
+          }
+        },
+        {
+          "x": 27.046,
+          "y": 56.496,
+          "z": 0.0,
+          "frame": {
+            "name": "robot"
+          }
+        }
+      ],
+      "frame": {
+        "name": "robot"
+      }
+    },
+    "frame": {
+      "name": "robot"
+    }
+  },
+  "map_to": {
+    "name": "Aasgard_A_new_asset",
+    "reference_positions": {
+      "positions": [
+        {
+          "x": 20236.360,
+          "y": 5077.990,
+          "z": 10.300,
+          "frame": {
+            "name": "asset"
+          }
+        },
+        {
+          "x": 20250.570,
+          "y": 5062.600,
+          "z": 10.3,
+          "frame": {
+            "name": "asset"
+          }
+        },
+        {
+          "x": 20263.135,
+          "y": 5083.855,
+          "z": 10.3,
+          "frame": {
+            "name": "asset"
+          }
+        },
+        {
+          "x": 20252.870,
+          "y": 5106.260,
+          "z": 10.3,
+          "frame": {
+            "name": "asset"
+          }
+        }
+      ],
+      "frame": {
+        "name": "asset"
+      }
+    },
+    "frame": {
+      "name": "asset"
+    },
+    "bounds": {
+      "position1": {
+        "x": 20234.4,
+        "y": 5057.5,
+        "z": 10,
+        "frame": {
+          "name": "asset"
+        }
+      },
+      "position2": {
+        "x": 20268.1,
+        "y": 5107.8,
+        "z": 40,
+        "frame": {
+          "name": "asset"
+        }
+      }
+    }
+  }
+}

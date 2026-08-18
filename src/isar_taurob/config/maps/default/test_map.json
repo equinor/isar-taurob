@@ -1,0 +1,95 @@
+{
+  "name": "test_map",
+  "map_from": {
+    "name": "test_map_robot",
+    "reference_positions": {
+      "positions": [
+        {
+          "x": 10,
+          "y": 20,
+          "z": 30,
+          "frame": {
+            "name": "robot"
+          }
+        },
+        {
+          "x": 40,
+          "y": 50,
+          "z": 60,
+          "frame": {
+            "name": "robot"
+          }
+        },
+        {
+          "x": 70,
+          "y": 80,
+          "z": 90,
+          "frame": {
+            "name": "robot"
+          }
+        }
+      ],
+      "frame": {
+        "name": "robot"
+      }
+    },
+    "frame": {
+      "name": "robot"
+    }
+  },
+  "map_to": {
+    "name": "test_map_asset",
+    "reference_positions": {
+      "positions": [
+        {
+          "x": 11,
+          "y": 21,
+          "z": 31,
+          "frame": {
+            "name": "asset"
+          }
+        },
+        {
+          "x": 41,
+          "y": 51,
+          "z": 61,
+          "frame": {
+            "name": "asset"
+          }
+        },
+        {
+          "x": 71,
+          "y": 81,
+          "z": 91,
+          "frame": {
+            "name": "asset"
+          }
+        }
+      ],
+      "frame": {
+        "name": "asset"
+      }
+    },
+    "frame": {
+      "name": "asset"
+    },
+    "bounds": {
+      "position1": {
+        "x": 5,
+        "y": 15,
+        "z": 30,
+        "frame": {
+          "name": "asset"
+        }
+      },
+      "position2": {
+        "x": 80,
+        "y": 90,
+        "z": 100,
+        "frame": {
+          "name": "asset"
+        }
+      }
+    }
+  }
+}

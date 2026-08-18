@@ -1,0 +1,95 @@
+{
+    "name": "TLAB",
+    "map_from": {
+      "name": "TLAB_robot",
+      "reference_positions": {
+        "positions": [
+          {
+            "x": 3.0,
+            "y": 10.0,
+            "z": 0.0,
+            "frame": {
+              "name": "robot"
+            }
+          },
+          {
+            "x": 20.0,
+            "y": 15.0,
+            "z": 0.0,
+            "frame": {
+              "name": "robot"
+            }
+          },
+          {
+            "x": 11.0,
+            "y": 32.0,
+            "z": 0.0,
+            "frame": {
+              "name": "robot"
+            }
+          }
+        ],
+        "frame": {
+          "name": "robot"
+        }
+      },
+      "frame": {
+        "name": "robot"
+      }
+    },
+    "map_to": {
+      "name": "TLAB_asset",
+      "reference_positions": {
+        "positions": [
+          {
+            "x": 3.0,
+            "y": 10.0,
+            "z": 0.0,
+            "frame": {
+              "name": "asset"
+            }
+          },
+          {
+            "x": 20.0,
+            "y": 15.0,
+            "z": 0.0,
+            "frame": {
+              "name": "asset"
+            }
+          },
+          {
+            "x": 11.0,
+            "y": 32.0,
+            "z": 0.0,
+            "frame": {
+              "name": "asset"
+            }
+          }
+        ],
+        "frame": {
+          "name": "asset"
+        }
+      },
+      "frame": {
+        "name": "asset"
+      },
+      "bounds": {
+        "position1": {
+          "x": 0.5,
+          "y": 37.0,
+          "z": 0.0,
+          "frame": {
+            "name": "asset"
+          }
+        },
+        "position2": {
+          "x": 26.5,
+          "y": 0.5,
+          "z": 50.0,
+          "frame": {
+            "name": "asset"
+          }
+        }
+      }
+    }
+  }

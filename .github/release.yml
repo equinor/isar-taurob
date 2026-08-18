@@ -1,0 +1,20 @@
+changelog:
+  categories:
+    - title: Breaking Changes 🛠
+      labels:
+        - breaking-change
+    - title: New Features 🎉
+      labels:
+        - feature
+    - title: Improvements
+      labels:
+        - improvement
+    - title: Bug Fixes
+      labels:
+        - bug
+    - title: Database Changes 💾
+      labels:
+        - database-change
+    - title: Other Changes
+      labels:
+        - "*"

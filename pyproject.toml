@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=64.0", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "isar_taurob"
+authors = [{ name = "Equinor ASA", email = "fg_robots_dev@equinor.com" }]
+description = "Integration and Supervisory control of Autonomous Robots - Taurob implementation"
+readme = "README.md"
+requires-python = ">=3.14"
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "alitra",
+    "imageio-ffmpeg",
+    "isar>=2.2.0",
+    "numpy",
+    "opentelemetry-api",
+    "pydantic-settings",
+    "pydantic",
+    "pytz",
+    "requests[socks]",
+    "scipy",
+]
+dynamic = ["version"]
+
+[project.urls]
+repository = "https://github.com/equinor/isar-taurob.git"
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "isort",
+    "mypy",
+    "pytest-mock",
+    "pytest",
+    "ruff",
+]
+
+[tool.setuptools_scm]
+# This section is empty but required for dynamic versioning.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+log_cli = true
+
+[tool.mypy]
+no_strict_optional = true
+no_site_packages = true
+ignore_missing_imports = true
+exclude = ["build"]
+files = ["src", "tests"]
+
+[tool.isort]
+include_trailing_comma = true
+line_length = 88
+multi_line_output = 3
+use_parentheses = true
+
+[tool.black]
+line_length = 88

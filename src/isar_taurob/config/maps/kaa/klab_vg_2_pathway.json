@@ -1,0 +1,79 @@
+{
+  "name": "klab_vgii_pathway",
+  "map_from": {
+    "name": "klab_vgii_pathway_robot",
+    "reference_positions": {
+      "positions": [
+        {
+          "x": 15.41,
+          "y": 4.96,
+          "z": 0.0,
+          "frame": {
+            "name": "robot"
+          }
+        },
+        {
+          "x": 4.483,
+          "y": 0.983,
+          "z": 0.0,
+          "frame": {
+            "name": "robot"
+          }
+        }
+      ],
+      "frame": {
+        "name": "robot"
+      }
+    },
+    "frame": {
+      "name": "robot"
+    }
+  },
+  "map_to": {
+    "name": "klab_vgii_pathway_asset",
+    "reference_positions": {
+      "positions": [
+        {
+          "x": 20262.211,
+          "y": 5263.111,
+          "z": 16.086,
+          "frame": {
+            "name": "asset"
+          }
+        },
+        {
+          "x": 20273.123,
+          "y": 5267.078,
+          "z": 16.130,
+          "frame": {
+            "name": "asset"
+          }
+        }
+      ],
+      "frame": {
+        "name": "asset"
+      }
+    },
+    "frame": {
+      "name": "asset"
+    },
+    "bounds": {
+      "position1": {
+        "x": 20252,
+        "y": 5260,
+        "z": 13,
+        "frame": {
+          "name": "asset"
+        }
+      },
+      "position2": {
+        "x": 20278,
+        "y": 5275,
+        "z": 40,
+        "frame": {
+          "name": "asset"
+        }
+      }
+    }
+  }
+}

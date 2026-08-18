@@ -1,0 +1,95 @@
+{
+  "name": "klab_vg_2",
+  "map_from": {
+    "name": "klab_vg_2_robot",
+    "reference_positions": {
+      "positions": [
+        {
+          "x": 32.42,
+          "y": 10.49,
+          "z": 0.00,
+          "frame": {
+            "name": "robot"
+          }
+        },
+        {
+          "x": 33.18,
+          "y": 21.94,
+          "z": 0.0,
+          "frame": {
+            "name": "robot"
+          }
+        },
+        {
+          "x": 9.02,
+          "y": 13.74,
+          "z": 0.0,
+          "frame": {
+            "name": "robot"
+          }
+        }
+      ],
+      "frame": {
+        "name": "robot"
+      }
+    },
+    "frame": {
+      "name": "robot"
+    }
+  },
+  "map_to": {
+    "name": "klab_vg_2_asset",
+    "reference_positions": {
+      "positions": [
+        {
+          "x": 20262.116,
+          "y": 5312.034,
+          "z": 14.446,
+          "frame": {
+            "name": "asset"
+          }
+        },
+        {
+          "x": 20250.550,
+          "y": 5313.011,
+          "z": 14.446,
+          "frame": {
+            "name": "asset"
+          }
+        },
+        {
+          "x": 20258.974,
+          "y": 5288.760,
+          "z": 14.446,
+          "frame": {
+            "name": "asset"
+          }
+        }
+      ],
+      "frame": {
+        "name": "asset"
+      }
+    },
+    "frame": {
+      "name": "asset"
+    },
+    "bounds": {
+      "position1": {
+        "x": 20239,
+        "y": 5286,
+        "z": 13,
+        "frame": {
+          "name": "asset"
+        }
+      },
+      "position2": {
+        "x": 20267,
+        "y": 5321,
+        "z": 40,
+        "frame": {
+          "name": "asset"
+        }
+      }
+    }
+  }
+}

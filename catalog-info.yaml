@@ -1,0 +1,30 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: isar-taurob
+  description: ISAR Robot implementation for the belt-driven Taurob robot delivered by Taurob. 
+  annotations:
+    github.com/project-slug: equinor/isar-taurob
+    github.com/team-slug: equinor/eq-robot-developer
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/eq-robot-developer
+  system: system:default/flotilla
+  dependsOn:
+    - component:default/isar
+    - component:default/taurob-api
+
+---
+
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: taurob-api
+  description: Taurob provided API for control of robot.
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/eq-robot-developer
+  system: system:default/flotilla
+  

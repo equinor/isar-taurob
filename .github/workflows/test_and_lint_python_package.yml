@@ -1,0 +1,26 @@
+name: Test and lint python package
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-lint-python-package:
+    uses: equinor/armada/.github/workflows/test_and_lint_python_package.yml@main
+    permissions:
+      contents: read
+    with:
+      python-versions: '["3.14"]'
+      test-env: >-
+        {"ENVIRONMENT":"local","TAUROB_API_USERNAME":"robot123","TAUROB_API_PASSWORD":"anything_goes"}
+      run-black: true
+      run-mypy: true
+      run-ruff: true
+      run-isort: false
