@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout infrastructure
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v6
         with:
           ref: main
           repository: equinor/robotics-infrastructure
@@ -60,14 +60,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Log in to robotics staging registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: roboticsstagingacr.azurecr.io
           username: ${{ secrets.ROBOTICS_ROBOTICSSTAGINGACR_USERNAME }}
           password: ${{ secrets.ROBOTICS_ROBOTICSSTAGINGACR_PASSWORD }}
 
       - name: Log in to robotics prod registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: roboticsprodacr.azurecr.io
           username: ${{ secrets.ROBOTICS_ROBOTICSPRODACR_USERNAME }}
