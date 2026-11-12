@@ -20,7 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "alitra",
-    "websockets>=15,<16",
+    "websockets>=15,<18",
     "imageio-ffmpeg",
     "isar>=2.7.3",
     "numpy",
