@@ -20,6 +20,17 @@ Finally, verify that you can run the tests:
 uv run pytest .
 ```
 
+## Container builds
+
+Production uses ISAR from `uv.lock`. To use a local checkout (including worktrees):
+
+```bash
+docker build -f Dockerfile.Local --build-context isar_source=../isar -t isar-taurob:local .
+```
+
+Local builds resolve source dependencies without changing `uv.lock`, include media
+forwarding support, and run as UID 1000 with writable `/data`. Rebuild after source edits.
+
 ## Dependencies
 
 The dependencies used for this package are listed in `pyproject.toml` and pinned in `uv.lock`. This ensures our builds are predictable and deterministic. This project uses [uv](https://docs.astral.sh/uv/) for dependency management:

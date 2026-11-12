@@ -1,3 +1,4 @@
+import datetime
 from http import HTTPStatus
 
 import pytest
@@ -9,6 +10,7 @@ from robot_interface.models.exceptions.robot_exceptions import (
 
 from isar_taurob.config import settings
 from isar_taurob.robot.api.request_handler import RequestHandler
+from isar_taurob.robot.api.sensor import SensorName, SensorValue
 from tests.utilities.mock_api_return_values.mock_taurob_api import MockTaurobAPI
 
 
@@ -189,7 +191,7 @@ def test_get_sensor_value(
         sensor_value = taurob_robot_api.get_sensor_value(sensor_name)
     except RobotCommunicationException:
         sensor_value = None
-    assert sensor_value == expected_output
+    assert sensor_value == SensorValue.model_validate(expected_output)
 
 
 @pytest.mark.parametrize(
@@ -219,3 +221,101 @@ def test_get_sensor_value_raises_exception(
 
     with pytest.raises(raises_exception):
         taurob_robot_api.get_sensor_value(sensor_name=sensor_name)
+
+
+def test_get_all_sensor_values_returns_snapshot_keyed_by_name(mocker, taurob_robot_api):
+    mocker.patch.object(
+        RequestHandler,
+        "get",
+        return_value=MockRequests(json_data=MockTaurobAPI.get_all_sensor_values()),
+    )
+
+    snapshot = taurob_robot_api.get_all_sensor_values()
+
+    for sensor_name in SensorName:
+        assert sensor_name in snapshot, f"{sensor_name} missing from snapshot"
+        assert snapshot[sensor_name].name == sensor_name
+
+    assert snapshot[SensorName.BATTERY_LEVEL].value == 10
+    assert snapshot[SensorName.ROBOT_STATE].value == "idle"
+
+
+def test_get_all_sensor_values_handles_null_values(mocker, taurob_robot_api):
+    mocker.patch.object(
+        RequestHandler,
+        "get",
+        return_value=MockRequests(json_data=MockTaurobAPI.get_all_sensor_values()),
+    )
+
+    snapshot = taurob_robot_api.get_all_sensor_values()
+
+    assert snapshot["robot.disable_vps"].value is None
+    assert snapshot["robot.disable_vps"].changed is None
+
+
+def test_get_all_sensor_values_skips_malformed_entries(mocker, taurob_robot_api):
+    snapshot_with_garbage = MockTaurobAPI.get_all_sensor_values() + [
+        "not a sensor entry",
+        {"value": "entry without a name"},
+        None,
+    ]
+    mocker.patch.object(
+        RequestHandler,
+        "get",
+        return_value=MockRequests(json_data=snapshot_with_garbage),
+    )
+
+    snapshot = taurob_robot_api.get_all_sensor_values()
+
+    for sensor_name in SensorName:
+        assert sensor_name in snapshot
+
+
+@pytest.mark.parametrize(
+    "read_sensors",
+    [
+        lambda api: api.get_all_sensor_values(),
+        lambda api: api.get_sensor_value(SensorName.POSE_BASE),
+    ],
+)
+def test_sensor_reads_fail_without_retrying(mocker, taurob_robot_api, read_sensors):
+    request = mocker.patch.object(
+        RequestHandler,
+        "get",
+        side_effect=RequestException("Connection reset"),
+    )
+
+    with pytest.raises(RobotCommunicationException):
+        read_sensors(taurob_robot_api)
+
+    assert request.call_count == 1
+
+
+def test_get_all_sensor_values_times_out_after_refresh_interval(
+    mocker, taurob_robot_api
+):
+    request = mocker.patch.object(
+        RequestHandler,
+        "get",
+        return_value=MockRequests(json_data=MockTaurobAPI.get_all_sensor_values()),
+    )
+
+    taurob_robot_api.get_all_sensor_values()
+
+    assert (
+        request.call_args.kwargs["request_timeout"] == settings.SENSOR_REFRESH_INTERVAL
+    )
+
+
+def test_sensor_value_is_older_than():
+    changed = datetime.datetime.now(datetime.UTC) - datetime.timedelta(minutes=5)
+    sensor_value = SensorValue(name="test", value=1, changed=changed)
+
+    assert sensor_value.is_older_than(datetime.timedelta(minutes=1))
+    assert not sensor_value.is_older_than(datetime.timedelta(minutes=10))
+
+
+def test_sensor_value_without_changed_is_stale():
+    sensor_value = SensorValue(name="test", value=1)
+
+    assert sensor_value.is_older_than(datetime.timedelta(days=365))

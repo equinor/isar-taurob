@@ -1,0 +1,59 @@
+{
+  "dateTime": "2026-10-08T10:55:28+02:00",
+  "estimatedDistance": 2.0,
+  "estimatedDistanceUnit": "meter",
+  "firmwareRelease": "2.21.2",
+  "frequencySelectionFrom": 33465.484375,
+  "frequencySelectionFromUnit": "Hz",
+  "frequencySelectionTo": 41321.7109375,
+  "frequencySelectionToUnit": "Hz",
+  "ldMetadata": {
+    "results": {
+      "cost": 0.0,
+      "costUnit": "EUR",
+      "electricityUsage": 0.0,
+      "electricityUsageUnit": "kW / year",
+      "isLeakRateAccurate": true,
+      "rate": 9.248553276062012,
+      "rateUnit": "l/min",
+      "reasonInaccurate": "NA",
+      "type": "Unknown",
+      "unitSystem": "metric"
+    },
+    "settings": {
+      "electricityCost": 0.0,
+      "electricityCostUnit": "EUR / kWh",
+      "gasCost": 0.0,
+      "gasCostUnit": "EUR / 1000L",
+      "gasType": "other",
+      "linePressureUnit": "Pa",
+      "linePressureValue": 1.0,
+      "operatingHoursPerYear": 0,
+      "powerRatio": 0.0,
+      "powerRatioUnit": "kW/1000L/min",
+      "unitSystem": "metric"
+    }
+  },
+  "notes": "",
+  "sampleRate": 109375,
+  "sampleRateUnit": "Hz",
+  "snrValue": 81.12086486816406,
+  "sourceLocations": {
+    "x": -0.10833487659692764,
+    "y": 0.11483430117368698,
+    "z": 1.9936710596084595
+  },
+  "splAtSource": 72.97914123535156,
+  "splAtSourceUnit": "dBSPL",
+  "tags": {
+    "assetID": "",
+    "assetName": "",
+    "assetStatus": "undetermined",
+    "assetType": ""
+  },
+  "targetPointDistance": 2.0,
+  "targetPointDistanceUnit": "meter",
+  "type": "leakDetection",
+  "version": 1,
+  "snrThreshold": 75.0
+}

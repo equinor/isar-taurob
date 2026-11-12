@@ -1,7 +1,11 @@
 from importlib.resources import as_file, files
+from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from isar_taurob.config.ome_streams import parse_ome_streams
 
 
 class Settings(BaseSettings):
@@ -22,6 +26,11 @@ class Settings(BaseSettings):
     # Correct name is important for correct API calls
     ROBOT_NAME: str = Field(default="william")
 
+    RECORDING_DATA_DIRECTORY: Path = Field(
+        default=Path("./recordings"),
+        validation_alias="ISAR_RECORDING_DATA_DIRECTORY",
+    )
+
     # Ensuring ROBOT_NAME is always lower case
     @field_validator("ROBOT_NAME")
     def lowercase_robot_name(cls, v):
@@ -39,6 +48,26 @@ class Settings(BaseSettings):
     API_PROXY: str = Field(
         default="socks5://localhost:1080"
     )  # We assume this is created, e.g., by wireproxy
+
+    # Public WSS URL returned to clients for playback.
+    OME_PUBLIC_URL: str = Field(default="")
+    # WS URL OME sees internally in the cluster and
+    # used to calculate the signature for playback URLs.
+    OME_SIGNATURE_URL: str = Field(default="")
+    # Shared key for signing playback URLs; must match OME's key.
+    OME_SIGNED_POLICY_SECRET: str = Field(default="")
+    # Time allowed to start playback with a signed URL.
+    OME_URL_TTL_SECONDS: int = Field(default=60)
+    # Maximum duration of an authorized stream.
+    OME_STREAM_TTL_SECONDS: int = Field(default=3600)
+    # Comma-separated approved Fleet camera IDs and browser display rotations.
+    OME_STREAMS: str = Field(default="front:-90")
+
+    @field_validator("OME_STREAMS")
+    @classmethod
+    def validate_ome_streams(cls, value: str) -> str:
+        parse_ome_streams(value)
+        return value
 
     # API endpoints
     ROBOT_MISSION_DEFINITION_ENDPOINT: str = Field(default="/fleet/mission/definition")
@@ -66,6 +95,9 @@ class Settings(BaseSettings):
 
     # The action id of the dock task to be used
     WALLBOX_DOCK_ACTION_ID: int = Field(default=15234)
+
+    # The name of the wallbox
+    WALLBOX_NAME: str = Field(default="wallbox_aasgard_grosglockner")
 
     ####################################################################################
     # For 2 degrees of freedom
@@ -116,10 +148,10 @@ class Settings(BaseSettings):
     FOUR_DOF_ARM_BASE_Y: float = Field(default=0.037)
     FOUR_DOF_ARM_BASE_Z: float = Field(default=0.364)
 
-    FOUR_DOF_ARM_LINK_1: float = Field(default=0.1)  # Not precise
+    FOUR_DOF_ARM_LINK_1: float = Field(default=0.1)
     FOUR_DOF_ARM_LINK_2: float = Field(default=0.417)
     FOUR_DOF_ARM_LINK_3: float = Field(default=0.611)
-    FOUR_DOF_ARM_LINK_4: float = Field(default=0.1)  # Not precise
+    FOUR_DOF_ARM_LINK_4: float = Field(default=0.1)
 
     FOUR_DOF_J1_LOWER_CONSTRAINT: float = Field(default=0.02)
     FOUR_DOF_J1_UPPER_CONSTRAINT: float = Field(default=5.655)
@@ -139,15 +171,16 @@ class Settings(BaseSettings):
     # If this is False a mp4 will be delivered
     THERMAL_VIDEO_SEQUENCE_FORMAT: bool = Field(default=False)
 
+    ACOUSTIC_SENSITIVITY: Literal["low", "medium", "high"] = Field(default="high")
+
     # File formats accepted for the different inspection steps
     # Comma separated string with the supported file formats
     FILE_FORMAT_IMAGE: list[str] = Field(default=["jpeg", "png"])
     FILE_FORMAT_THERMAL_IMAGE: list[str] = Field(default=["fff"])
     FILE_FORMAT_VIDEO: list[str] = Field(default=["mp4"])
 
-    # The robot delivers visualized mp4 videos muxed from raw camera frames with
-    # irregular capture timestamps (variable frame rate). We re-encode them to a
-    # constant frame rate before uploading. Set to False to upload the original bytes.
+    # Video is re-encoded if this is set to true due to some browsers requiring
+    # a constant frame rate. Set to False to upload the original bytes.
     NORMALIZE_VIDEO_TO_CONSTANT_FRAME_RATE: bool = Field(default=True)
 
     # Target constant frame rate (fps) used when normalizing videos.
@@ -162,11 +195,10 @@ class Settings(BaseSettings):
     BATTERY_PUBLISH_INTERVAL: int = Field(default=5)
     PRESSURE_PUBLISH_INTERVAL: int = Field(default=5)
     OBSTACLE_PUBLISH_INTERVAL: int = Field(default=10)
-    TEMPERATURE_PUBLISH_INTERVAL: int = Field(default=30)
-    CPU_LOAD_PUBLISH_INTERVAL: int = Field(default=30)
 
-    # Flipper joint angle in radians
-    FLIPPER_JOINT: float = Field(default=0.20)
+    # Max age of the cached GET /sensor/all snapshot before a read refreshes it.
+    # Also used as the request timeout for the refresh.
+    SENSOR_REFRESH_INTERVAL: int = Field(default=3)
 
     model_config = SettingsConfigDict(
         env_prefix="TAUROB_",

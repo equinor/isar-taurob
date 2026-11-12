@@ -1,21 +1,27 @@
-FROM python:3.14-slim AS build
+FROM ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff AS uv
+FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4 AS build
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=uv /uv /uvx /bin/
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends git build-essential gcc \
+    pkg-config libcairo2-dev libgirepository-2.0-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --extra recording --no-dev --no-install-project
 
 COPY . .
-RUN --mount=source=./.git,target=./.git,type=bind uv sync --frozen --no-editable --no-dev
+RUN --mount=source=./.git,target=./.git,type=bind uv sync --frozen --extra recording --no-editable --no-dev
 
-FROM python:3.14-slim
+FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg libcairo2 libgirepository-2.0-0 gir1.2-gst-plugins-bad-1.0 \
+    gstreamer1.0-nice gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+    && rm -rf /var/lib/apt/lists/*
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 3000

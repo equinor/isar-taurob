@@ -1,0 +1,51 @@
+{
+  "dateTime": "2026-10-08T10:55:28+02:00",
+  "firmwareVersion": "2.21.2",
+  "measurements": [
+    {
+      "results": {
+        "cost": 0.0,
+        "leakRate": 9.248553276062012,
+        "snr": 81.12086486816406,
+        "sourceLocation": {
+          "x": -0.10833487659692764,
+          "y": 0.11483430117368698,
+          "z": 1.9936710596084595
+        },
+        "splAtSource": 72.97914123535156
+      },
+      "settings": {
+        "autoDistance": false,
+        "electricityCost": 0.0,
+        "electricityUsage": 0.0,
+        "frequencySelection": [
+          {"from": 33465.484375, "to": 41321.7109375}
+        ],
+        "gasCost": 0.0,
+        "gasType": "Other",
+        "licensing": "Advanced",
+        "operationTime": 0,
+        "powerRatio": 0.0,
+        "sampleRate": 109375.0,
+        "targetPointDistance": 1.9936710596084595
+      },
+      "type": "Leak",
+      "units": {
+        "cost": "EUR / 1000L",
+        "electricityCost": "EUR / kW",
+        "electricityUsage": "kW / year",
+        "frequencySelection": "Hz",
+        "leakRate": "1000L / minute",
+        "operationTime": "hours / year",
+        "powerRatio": "kW / 1000L / minute",
+        "sampleRate": "Hz",
+        "snr": "-",
+        "sourceLocation": "meter",
+        "splAtSource": "dBSPL",
+        "targetPointDistance": "meter"
+      }
+    }
+  ],
+  "version": 2,
+  "snrThreshold": 75.0
+}

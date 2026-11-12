@@ -19,6 +19,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     with:
       registry: roboticsstagingacr.azurecr.io
       image_name: robotics/isar-taurob
@@ -26,9 +27,9 @@ jobs:
       secondary_tag: latest
       path_to_dockerfile: Dockerfile
       path_to_context: .
-    secrets:
-      registry_password: ${{ secrets.ROBOTICS_ROBOTICSSTAGINGACR_PASSWORD }}
-      registry_username: ${{ secrets.ROBOTICS_ROBOTICSSTAGINGACR_USERNAME }}
+      environment: Staging
+      use_oidc: true
+      azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
   deploy:
     name: Update deployment in Staging
@@ -41,5 +42,6 @@ jobs:
       tag: ${{ github.event.release.tag_name }}
       author_name: ${{ github.event.release.author.login }}
       infrastructure_repository: equinor/robotics-infrastructure
+      kustomization_base_path: k8s_kustomize/robotics/overlays
     secrets:
       deploy_key: ${{ secrets.ROBOTICS_INFRASTRUCTURE_DEPLOY_KEY }}

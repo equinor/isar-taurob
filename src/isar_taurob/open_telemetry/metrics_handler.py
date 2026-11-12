@@ -2,7 +2,9 @@ import logging
 
 from opentelemetry import metrics
 from opentelemetry.metrics import CallbackOptions, Meter, Observation
+from robot_interface.models.exceptions.robot_exceptions import RobotException
 
+from isar_taurob.open_telemetry.pose_metrics import PoseMetrics
 from isar_taurob.robot.telemetry.taurob_telemetry import TaurobTelemetry
 
 logger = logging.getLogger(__name__)
@@ -18,6 +20,7 @@ class MetricsHandler:
 
         self.meter: Meter = metrics.get_meter("isar.taurob")
         self._setup_observable_gauges()
+        self.pose_metrics = PoseMetrics(self.meter, telemetry, robot_name, isar_id)
 
     def _setup_observable_gauges(self) -> None:
         self.meter.create_observable_gauge(
@@ -68,9 +71,16 @@ class MetricsHandler:
         ]
 
     def _observe_joint_temperatures(self, _: CallbackOptions) -> list[Observation]:
-        observations: list[Observation] = []
+        try:
+            joint_temperatures: dict[str, float] = (
+                self.telemetry.get_joint_temperatures()
+            )
+        except RobotException as e:
+            logger.warning(f"Failed to read joint temperatures: {e.error_description}")
+            return []
 
-        for sensor_key, temp_value in self.telemetry.last_joint_temps.items():
+        observations: list[Observation] = []
+        for sensor_key, temp_value in joint_temperatures.items():
             observations.append(
                 Observation(
                     value=temp_value,
@@ -84,13 +94,15 @@ class MetricsHandler:
         return observations
 
     def _observe_cpu_load(self, _: CallbackOptions) -> list[Observation]:
-        last_cpu_load: float | None = self.telemetry.last_cpu_load
-        if last_cpu_load is None:
+        try:
+            cpu_load: float = self.telemetry.get_cpu_load()
+        except RobotException as e:
+            logger.warning(f"Failed to read robot CPU load: {e.error_description}")
             return []
 
         return [
             Observation(
-                value=last_cpu_load,
+                value=cpu_load,
                 attributes={"robot_name": self.robot_name, "isar_id": self.isar_id},
             )
         ]

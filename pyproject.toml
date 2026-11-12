@@ -20,8 +20,9 @@ classifiers = [
 ]
 dependencies = [
     "alitra",
+    "websockets>=15,<16",
     "imageio-ffmpeg",
-    "isar>=2.2.0",
+    "isar>=2.7.3",
     "numpy",
     "opentelemetry-api",
     "pydantic-settings",
@@ -36,6 +37,7 @@ dynamic = ["version"]
 repository = "https://github.com/equinor/isar-taurob.git"
 
 [project.optional-dependencies]
+recording = ["PyGObject>=3.50,<4; sys_platform == 'linux'"]
 dev = [
     "black",
     "isort",
@@ -47,6 +49,9 @@ dev = [
 
 [tool.setuptools_scm]
 # This section is empty but required for dynamic versioning.
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.conf", "config/settings.env"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -67,3 +72,4 @@ use_parentheses = true
 
 [tool.black]
 line_length = 88
+target-version = ["py314"]

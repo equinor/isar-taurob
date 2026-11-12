@@ -11,25 +11,19 @@ from robot_interface.test_robot_interface import interface_test
 from isar_taurob.config import settings
 from isar_taurob.robot.api.api import API
 from isar_taurob.robot.api.request_handler import RequestHandler
+from isar_taurob.robot.api.sensor import TAUROB_TIME_FORMAT
 from isar_taurob.robot.telemetry.taurob_telemetry import TaurobTelemetry
 from isar_taurob.robotinterface import Robot
+from tests.utilities.mock_api_return_values.mock_taurob_api import MockTaurobAPI
 
-mock_recent_pressure_update = {
-    "name": "sensor.pcu.pressure_1",
-    "value": 12.34,
-    "changed": datetime.now().astimezone(tz=pytz.utc).strftime(API.TAUROB_TIME_FORMAT),
-    "version": 0,
-}
+mock_recent_snapshot = MockTaurobAPI.get_all_sensor_values()
 
-mock_old_pressure_update = {
-    "name": "sensor.pcu.pressure_1",
-    "value": 12.34,
-    "changed": (
+mock_old_snapshot = MockTaurobAPI.get_all_sensor_values(
+    changed=(
         datetime.now().astimezone(tz=pytz.utc)
         - timedelta(seconds=settings.ROBOT_REQUESTS_TIMEOUT + 60)
-    ).strftime(API.TAUROB_TIME_FORMAT),
-    "version": 0,
-}
+    ).strftime(TAUROB_TIME_FORMAT)
+)
 
 
 def test_interface() -> None:
@@ -41,9 +35,7 @@ def test_interface() -> None:
 @mock.patch.object(
     TaurobTelemetry, "get_robot_remote_stop", mock.Mock(return_value=False)
 )
-@mock.patch.object(
-    API, "_unpack_json", mock.Mock(return_value=mock_recent_pressure_update)
-)
+@mock.patch.object(API, "_unpack_json", mock.Mock(return_value=mock_recent_snapshot))
 @mock.patch.object(API, "get_scheduled_actions", mock.Mock(return_value=[]))
 @mock.patch.object(RequestHandler, "get", mock.Mock())
 @mock.patch.object(
@@ -57,17 +49,15 @@ def test_robot_status_is_available_when_recent_update() -> None:
     status: RobotStatus = robot.robot_status()
     assert status is RobotStatus.Offline
 
-    # Get a status update of pressure
-    robot._get_pressure_telemetry("test_isar_id", "test_robot_name")
+    robot.telemetry.refresh_sensor_cache()
+    robot._get_pressure_telemetry()
 
     # Check that robot is set to available
     newStatus: RobotStatus = robot.robot_status()
     assert newStatus is RobotStatus.Available
 
 
-@mock.patch.object(
-    API, "_unpack_json", mock.Mock(return_value=mock_old_pressure_update)
-)
+@mock.patch.object(API, "_unpack_json", mock.Mock(return_value=mock_old_snapshot))
 @mock.patch.object(API, "get_scheduled_actions", mock.Mock(return_value=[]))
 @mock.patch.object(RequestHandler, "get", mock.Mock())
 @mock.patch.object(
@@ -81,9 +71,9 @@ def test_robot_status_is_offline_when_old_update() -> None:
     status: RobotStatus = robot.robot_status()
     assert status is RobotStatus.Offline
 
-    # Get a status update of pressure
+    robot.telemetry.refresh_sensor_cache()
     try:
-        robot._get_pressure_telemetry("test_isar_id", "test_robot_name")
+        robot._get_pressure_telemetry()
     except RobotTelemetryNoUpdateException:
         pass  # Expected exception for outdated telemetry
 
