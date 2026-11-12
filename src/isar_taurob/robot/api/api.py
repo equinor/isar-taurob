@@ -1,4 +1,3 @@
-import datetime
 import json
 import logging
 import uuid
@@ -7,7 +6,7 @@ from enum import Enum
 from http import HTTPStatus
 from typing import Any
 
-import pytz
+from pydantic import ValidationError
 from requests import HTTPError
 from requests.exceptions import JSONDecodeError, RequestException, Timeout
 from requests.models import Response
@@ -20,19 +19,17 @@ from robot_interface.models.exceptions.robot_exceptions import (
 from isar_taurob.config import settings
 from isar_taurob.robot.api.measurement_metadata import MeasurementMetadata
 from isar_taurob.robot.api.request_handler import RequestHandler
+from isar_taurob.robot.api.sensor import SensorValue
 from isar_taurob.robot.taurob_model.arm import Joints
 from isar_taurob.robot.taurob_model.taurob_pose import TaurobPose
 
 
 class ActionType(str, Enum):
-    localize = "start"
     measure = "measure"
     driveTo = "drive"
 
 
 class API:
-    TAUROB_TIME_FORMAT: str = "%Y-%m-%dT%H:%M:%S.%f%z %Z"
-
     def __init__(
         self,
         request_handler: RequestHandler,
@@ -52,9 +49,6 @@ class API:
         self.robot_name = robot_name
         self.request_timeout = request_timeout
         self.logger = logging.getLogger(settings.LOGGER_NAME)
-        self.last_update_from_robot: datetime.datetime = datetime.datetime(
-            year=datetime.MINYEAR, month=1, day=1, tzinfo=pytz.utc
-        )
 
         self.base_url_robot = self.host + robot_endpoint
         self.base_url_mission_definition = self.host + mission_definition_endpoint
@@ -62,42 +56,79 @@ class API:
         self.base_url_robot_action = self.host + robot_action_endpoint
         self.base_url_editor = self.host + robot_mission_editor_endpoint
 
-    def get_sensor_value(self, sensor_name: str) -> dict:
+    def get_robot_video_streams(self) -> list[dict]:
+        """Read camera roles from Fleet without treating its WS URLs as OVT sources."""
+        try:
+            response = self.request_handler.get(
+                f"{self.base_url_robot}/{self.robot_name}"
+            )
+        except RequestException as exc:
+            raise RobotCommunicationException(
+                error_description="Could not retrieve robot video streams from Fleet"
+            ) from exc
+        robot = self._unpack_json(response, dict)
+        streams = robot.get("video_streams")
+        return streams if isinstance(streams, list) else []
+
+    def get_sensor_value(self, sensor_name: str) -> SensorValue:
         """
         :param sensor_name: Name of sensor (e.g. "light")
-        :return: Returns a dict containing sensor value and metadata
+        :return: The sensor value and its metadata
         """
         url: str = f"{self.base_url_robot}/{self.robot_name}/sensor/{sensor_name}"
         try:
-            response = self.request_handler.get(url)
+            response: Response = self.request_handler.get(url)
         except RequestException as e:
             error_description: str = (
-                f"An error of type {e.__class__.__name__} occurred while retrieving sensor value '{sensor_name}' from robot API"
+                f"An error of type {e.__class__.__name__} occurred while "
+                f"retrieving sensor value '{sensor_name}' from robot API"
             )
-            raise RobotCommunicationException(error_description=error_description)
+            self.logger.error(error_description)
+            raise RobotCommunicationException(
+                error_description=error_description
+            ) from e
 
         body: dict = self._unpack_json(response, dict)
 
-        return body
+        return self._to_sensor_value(body)
 
-    def update_last_robot_update_time(self, sensor_response_body: dict):
-        if sensor_response_body["changed"] is None:
-            return
-
+    def get_all_sensor_values(self) -> dict[str, SensorValue]:
+        """Fetch all sensors in one request. Not retried or logged here; the
+        caller decides how to handle failures."""
+        url: str = f"{self.base_url_robot}/{self.robot_name}/sensor/all"
         try:
-            last_update_of_sensor: datetime.datetime = datetime.datetime.strptime(
-                sensor_response_body["changed"], API.TAUROB_TIME_FORMAT
-            ).replace(tzinfo=datetime.UTC)
-        except ValueError as e:
-            self.logger.warning(
-                f"Could not parse time string '{sensor_response_body['changed']}' from robot API with error message: {e}. Will return preivious value of last update time."
+            response: Response = self.request_handler.get(
+                url, request_timeout=settings.SENSOR_REFRESH_INTERVAL
             )
-            return self.last_update_from_robot
+        except RequestException as e:
+            raise RobotCommunicationException(
+                error_description=(
+                    f"An error of type {e.__class__.__name__} occurred while "
+                    f"retrieving all sensor values from robot API"
+                )
+            ) from e
 
-        self.last_update_from_robot = max(
-            self.last_update_from_robot, last_update_of_sensor
-        )
-        return last_update_of_sensor
+        body: list = self._unpack_json(response, list)
+
+        sensor_values: dict[str, SensorValue] = {}
+        for entry in body:
+            try:
+                sensor_value: SensorValue = SensorValue.model_validate(entry)
+            except ValidationError as e:
+                # Skip malformed entries; the rest are still usable
+                self.logger.debug(f"Skipping malformed sensor entry: {e}")
+                continue
+            sensor_values[sensor_value.name] = sensor_value
+
+        return sensor_values
+
+    def _to_sensor_value(self, entry: Any) -> SensorValue:
+        try:
+            return SensorValue.model_validate(entry)
+        except ValidationError as e:
+            error_description: str = f"Could not parse sensor entry from robot API: {e}"
+            self.logger.warning(error_description)
+            raise RobotAPIException(error_description=error_description)
 
     def schedule(self, mission_id: int, step_list) -> int:
         url = (
@@ -108,6 +139,38 @@ class API:
             # TODO Find suitable place to set request timeout for schedule call
             response = self.request_handler.post(
                 url=url, json_body=step_list, request_timeout=300
+            )
+        except HTTPError as e:
+            error_description: str = (
+                f"An HTTP Error occurred with status "
+                f"code {e.response.status_code if e.response else None}"
+            )
+            self.logger.exception(error_description)
+            raise RobotAPIException(error_description=error_description)
+
+        except RequestException as e:
+            error_description = (
+                f"An error occurred during the mission scheduling to the robot: {e}"
+            )
+            raise RobotCommunicationException(error_description=error_description)
+
+        body: dict = self._unpack_json(response, dict)
+        try:
+            return body["instance_id"]
+        except KeyError:
+            error_description = (
+                "An error occurred while accessing the"
+                " schedule mission return dictionary"
+            )
+            self.logger.exception(error_description)
+            raise RobotAPIException(error_description=error_description)
+
+    def schedule_return_home(self) -> int:
+        url = f"{self.base_url_robot_action}/go-to-wallbox/{self.robot_name}?wallbox_name={settings.WALLBOX_NAME}"
+
+        try:
+            response = self.request_handler.post(
+                url=url, request_timeout=settings.ROBOT_REQUESTS_TIMEOUT
             )
         except HTTPError as e:
             error_description: str = (
@@ -187,25 +250,11 @@ class API:
         return instance_ids
 
     def get_scheduled_actions(self, robot_name: str) -> list:
-        # The reason this function uses the requests package and not the request_handler
-        # is that the output from the API gives a 404 Not Found when an empty list is
-        # returned. This is not ideal, but a workaround such that we may avoid logging
-        # exceptions constantly when the functionality is behaving as expected.
         try:
-            # with warnings.catch_warnings():
-            #     warnings.simplefilter("ignore")
-            #     response: Response = requests.get(
-            #         url=f"{self.base_url_robot_action}/list/{robot_name}",
-            #         auth=self.auth,
-            #         verify=False,
-            #     )
             response = self.request_handler.get(
                 f"{self.base_url_robot_action}/list/{robot_name}"
             )
-
         except RequestException as e:
-            if e.response.status_code == HTTPStatus.NOT_FOUND:
-                return []
             error_description: str = (
                 f"A request error occurred while collecting scheduled actions: {e}"
             )
@@ -215,9 +264,6 @@ class API:
         try:
             response.raise_for_status()
         except HTTPError as e:
-            if e.response.status_code == HTTPStatus.NOT_FOUND:
-                return []
-
             error_description = (
                 f"A HTTP Error occurred with status code {e.response.status_code}"
             )
@@ -318,8 +364,7 @@ class API:
                 "x":{pose.x}, \
                 "y":{pose.y}, \
                 "theta":{pose.theta}, \
-                "floor":"{map_name}", \
-                "flipper_joint":{settings.FLIPPER_JOINT} \
+                "floor":"{map_name}" \
             }}"""
 
         if joints is not None:

@@ -31,6 +31,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     with:
       registry: roboticsdevacr.azurecr.io
       image_name: robotics/isar-taurob
@@ -38,9 +39,9 @@ jobs:
       secondary_tag: dev
       path_to_dockerfile: Dockerfile
       path_to_context: .
-    secrets:
-      registry_password: ${{ secrets.ROBOTICS_ROBOTICSDEVACR_PASSWORD }}
-      registry_username: ${{ secrets.ROBOTICS_ROBOTICSDEVACR_USERNAME }}
+      environment: Development
+      use_oidc: true
+      azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
   deploy:
     name: Update deployment in Development
@@ -54,5 +55,6 @@ jobs:
       author_email: ${{ github.event.head_commit.author.email }}
       author_name: ${{ github.event.head_commit.author.name }}
       infrastructure_repository: equinor/robotics-infrastructure
+      kustomization_base_path: k8s_kustomize/robotics/overlays
     secrets:
       deploy_key: ${{ secrets.ROBOTICS_INFRASTRUCTURE_DEPLOY_KEY }}

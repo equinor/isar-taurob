@@ -1,0 +1,34 @@
+[
+  {
+    "instance_id": 39544,
+    "status": "successful",
+    "measurement_results": [
+      {
+        "url": "https://127.0.0.1:8443/basic/fleet/measurement/18304",
+        "media_type": "application/octet-stream",
+        "action_type": "take_measurement"
+      },
+      {
+        "url": "https://127.0.0.1:8443/basic/fleet/measurement/18305",
+        "media_type": "image/jpeg",
+        "action_type": "take_measurement"
+      },
+      {
+        "url": "https://127.0.0.1:8443/basic/fleet/measurement/18306",
+        "media_type": "application/json",
+        "action_type": "take_measurement"
+      },
+      {
+        "url": "https://127.0.0.1:8443/basic/fleet/measurement/18307",
+        "media_type": "application/json",
+        "action_type": "take_measurement"
+      },
+      {
+        "url": "https://127.0.0.1:8443/basic/fleet/measurement/18308",
+        "media_type": "video/mp4",
+        "action_type": "take_measurement"
+      }
+    ],
+    "mission_step": null
+  }
+]

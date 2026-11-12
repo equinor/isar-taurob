@@ -1,0 +1,111 @@
+{
+  "name": "N",
+  "map_from": {
+    "name": "N_robot",
+    "reference_positions": {
+      "positions": [
+        {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.00,
+          "frame": {
+            "name": "robot"
+          }
+        },
+        {
+          "x": 30.0,
+          "y": 0.0,
+          "z": 0.0,
+          "frame": {
+            "name": "robot"
+          }
+        },
+        {
+          "x": 30.0,
+          "y": 28.0,
+          "z": 0.0,
+          "frame": {
+            "name": "robot"
+          }
+        },
+        {
+          "x": 0.0,
+          "y": 28.0,
+          "z": 0.0,
+          "frame": {
+            "name": "robot"
+          }
+        }
+      ],
+      "frame": {
+        "name": "robot"
+      }
+    },
+    "frame": {
+      "name": "robot"
+    }
+  },
+  "map_to": {
+    "name": "N_asset",
+    "reference_positions": {
+      "positions": [
+        {
+          "x": 20882.0,
+          "y": 4930.0,
+          "z": 2.00,
+          "frame": {
+            "name": "asset"
+          }
+        },
+        {
+          "x": 20912.0,
+          "y": 4930.0,
+          "z": 2.00,
+          "frame": {
+            "name": "asset"
+          }
+        },
+        {
+          "x": 20912.0,
+          "y": 4958.0,
+          "z": 2.00,
+          "frame": {
+            "name": "asset"
+          }
+        },
+        {
+          "x": 20882.0,
+          "y": 4958.0,
+          "z": 2.00,
+          "frame": {
+            "name": "asset"
+          }
+        }
+      ],
+      "frame": {
+        "name": "asset"
+      }
+    },
+    "frame": {
+      "name": "asset"
+    },
+    "bounds": {
+      "position1": {
+        "x": 20882.0,
+        "y": 4930.0,
+        "z": 0,
+        "frame": {
+          "name": "asset"
+        }
+      },
+      "position2": {
+        "x": 20912.0,
+        "y": 4958.0,
+        "z": 40,
+        "frame": {
+          "name": "asset"
+        }
+      }
+    }
+  }
+}

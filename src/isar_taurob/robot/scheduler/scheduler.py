@@ -6,17 +6,19 @@ from robot_interface.models.exceptions.robot_exceptions import (
 )
 from robot_interface.models.mission.mission import MissionStatus
 from robot_interface.models.mission.task import (
+    TASKS,
     RecordAudio,
+    TakeAcousticMeasurement,
     TakeImage,
     TakeThermalImage,
     TakeThermalVideo,
     TakeVideo,
-    Task,
 )
 
 from isar_taurob.config import settings
 from isar_taurob.robot.api.api import API
 from isar_taurob.robot.api.measurement_metadata import (
+    AcousticMeasurementRequest,
     MeasurementMetadata,
     ResultFormat,
     ResultType,
@@ -43,8 +45,6 @@ class Scheduler:
 
     def get_task_status(self, instance_id: int, action_id: int):
         body = self.robot_api.get_mission_instance_details(instance_id=instance_id)
-        # TODO: Add exception here for failed 'start', aka localization
-        # If ISAR doesn't have task for localization and ask for it. Localization will never be checked
 
         try:
             task_status = next(
@@ -70,7 +70,6 @@ class Scheduler:
 
         status = map_taurob_status_to_mission_status(body[0]["status"])
 
-        ## Workaround to handle that mission status sometimes becomes successful even if tasks have failed
         if status == MissionStatus.Successful:
             for step in body:
                 step_status = map_taurob_status_to_task_status(step["status"])
@@ -84,7 +83,6 @@ class Scheduler:
                     if step["mission_step"]["step_type"] == "dock":
                         return MissionStatus.Failed
                     return MissionStatus.PartiallySuccessful
-        ## Workaround end
 
         return map_taurob_status_to_mission_status(status=body[0]["status"])
 
@@ -97,7 +95,7 @@ class Scheduler:
             step_list={
                 "steps": action_ids,
                 "options": {
-                    "flipper_before_measurement": True,
+                    "flipper_before_measurement": False,
                     "record_rosbag": settings.RECORD_ROSBAGS,
                     "light": False,
                     "keep_localization_on": True,
@@ -109,8 +107,16 @@ class Scheduler:
         )
         return current_mission_instance_id
 
-    def get_measurement_metadata(self, task: Task) -> MeasurementMetadata:
-        if isinstance(task, TakeImage):
+    def get_measurement_metadata(self, task: TASKS) -> MeasurementMetadata:
+        if isinstance(task, TakeAcousticMeasurement):
+            return AcousticMeasurementRequest(
+                sensor_name=SensorName.Acoustic,
+                result_type=ResultType.LeakDetection,
+                result_format=ResultFormat.Video,
+                sensitivity=settings.ACOUSTIC_SENSITIVITY,
+            )
+
+        elif isinstance(task, TakeImage):
             return MeasurementMetadata(
                 sensor_name=SensorName.Visual,
                 result_type=ResultType.Image,
