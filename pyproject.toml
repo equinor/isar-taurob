@@ -22,7 +22,7 @@ dependencies = [
     "alitra",
     "websockets>=15,<16",
     "imageio-ffmpeg",
-    "isar>=2.7.3",
+    "isar>=2.8.2",
     "numpy",
     "opentelemetry-api",
     "pydantic-settings",

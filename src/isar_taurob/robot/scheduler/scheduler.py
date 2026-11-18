@@ -82,7 +82,6 @@ class Scheduler:
                     )
                     if step["mission_step"]["step_type"] == "dock":
                         return MissionStatus.Failed
-                    return MissionStatus.PartiallySuccessful
 
         return map_taurob_status_to_mission_status(status=body[0]["status"])
 
