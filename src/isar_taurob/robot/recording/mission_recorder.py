@@ -54,9 +54,9 @@ class TaurobMissionRecorder(MissionRecorder):
         if not self.ready.wait(5):
             raise RuntimeError("Recording loop did not start")
 
-    def start(self, mission_id: str) -> None:
+    def start(self, mission_id: str, mission_name: str) -> None:
         """Schedule mission recording on the background loop from any thread."""
-        self.loop.call_soon_threadsafe(self._start_session, mission_id)
+        self.loop.call_soon_threadsafe(self._start_session, mission_id, mission_name)
 
     def stop(self, mission_id: str, interrupted: bool = False) -> None:
         """Schedule recording completion on the background loop from any thread."""
@@ -125,7 +125,7 @@ class TaurobMissionRecorder(MissionRecorder):
         """Publish the current session snapshot through the platform publisher."""
         await self.publisher.publish_session(session)
 
-    def _start_session(self, mission_id: str) -> None:
+    def _start_session(self, mission_id: str, mission_name: str) -> None:
         """Create and launch capture unless the mission is active or already ended."""
         if self.closing or mission_id in self.workers:
             return
@@ -134,6 +134,7 @@ class TaurobMissionRecorder(MissionRecorder):
             return
         session = existing or DriverRecordingSession(
             run_id=mission_id,
+            mission_name=mission_name,
             status="Starting",
             started_at=timestamp(),
             mission_started_at=timestamp(),
