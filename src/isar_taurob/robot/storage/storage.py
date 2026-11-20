@@ -3,7 +3,7 @@ import logging
 import os
 import subprocess
 import tempfile
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import imageio_ffmpeg
 from pydantic import ValidationError
@@ -15,22 +15,16 @@ from robot_interface.models.inspection.inspection import (  # type: ignore
     AcousticMeasurement,
     Audio,
     AudioMetadata,
-    CO2Measurement,
-    COMeasurement,
     GasMeasurement,
     GasMeasurementMetadata,
-    H2SMeasurement,
     Image,
     ImageMetadata,
     Inspection,
     InspectionMetadata,
-    IsobutyleneMeasurement,
-    O2Measurement,
     ThermalImage,
     ThermalImageMetadata,
     ThermalVideo,
     ThermalVideoMetadata,
-    TolueneMeasurement,
     Video,
     VideoMetadata,
 )
@@ -46,27 +40,9 @@ from robot_interface.models.mission.task import (
 from isar_taurob.config import settings
 from isar_taurob.robot.api.acoustic_metadata import AcousticMetadata
 from isar_taurob.robot.api.api import API
+from isar_taurob.robot.api.gas_measurement import GAS_MEASUREMENT_TYPES, GasMeasurements
 from isar_taurob.robot.api.sensor import SensorName
 from isar_taurob.robot.telemetry.taurob_telemetry import TaurobTelemetry
-
-# The gas sensor reports one reading per gas species. The keys are the
-# species names used by the X-am 8000 sensor.
-GAS_MEASUREMENT_TYPES: dict[str, type[GasMeasurement]] = {
-    "IBUT": IsobutyleneMeasurement,
-    "CO2": CO2Measurement,
-    "TOLU": TolueneMeasurement,
-    "O2": O2Measurement,
-    "CO": COMeasurement,
-    "H2S": H2SMeasurement,
-}
-
-
-def _get_decimal_places(value: object) -> int | None:
-    if isinstance(value, int):
-        return 0
-    if isinstance(value, Decimal) and value.is_finite():
-        return max(0, -int(value.as_tuple().exponent))
-    return None
 
 
 class Storage:
@@ -236,34 +212,34 @@ class Storage:
         )
 
         try:
-            # Expected format: {"gas_type_shortname": {"value": float, "unit": str}}
-            all_gas_values_dict: dict = json.loads(gas_values_json, parse_float=Decimal)
-        except (TypeError, json.JSONDecodeError) as e:
-            error_message = (
-                f"Could not decode the gas measurement for task '{task.id}': {e}"
+            payload = json.loads(
+                gas_values_json, parse_float=Decimal, parse_int=Decimal
             )
+            readings = GasMeasurements.model_validate(payload).root
+        except (
+            TypeError,
+            json.JSONDecodeError,
+            InvalidOperation,
+            ValidationError,
+        ) as e:
+            error_message = f"Invalid gas measurement for task '{task.id}': {e}"
             self.logger.error(error_message)
             raise RobotRetrieveInspectionException(error_message) from e
 
         measurements: list[GasMeasurement] = []
         for gas_type_shortname, measurement_type in GAS_MEASUREMENT_TYPES.items():
-            gas_value_dict: dict | None = all_gas_values_dict.get(gas_type_shortname)
-            if gas_value_dict is None:
+            reading = readings.get(gas_type_shortname)
+            if reading is None:
                 continue
-            try:
-                raw_value = gas_value_dict["value"]
-                measurement: GasMeasurement = measurement_type(
+            measurements.append(
+                measurement_type(
                     id=task.id,
-                    value=float(raw_value),
-                    unit=str(gas_value_dict["unit"]),
-                    decimal_places=_get_decimal_places(raw_value),
+                    value=float(reading.value),
+                    unit=reading.unit,
+                    decimal_places=reading.decimal_places,
                     metadata=inspection_metadata,
                 )
-            except (KeyError, TypeError, ValueError) as e:
-                error_message = f"Invalid gas reading for '{gas_type_shortname}' in task '{task.id}': {e}"
-                self.logger.error(error_message)
-                raise RobotRetrieveInspectionException(error_message) from e
-            measurements.append(measurement)
+            )
 
         if not measurements:
             error_message = (
