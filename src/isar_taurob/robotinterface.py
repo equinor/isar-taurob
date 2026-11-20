@@ -81,6 +81,11 @@ class Robot(RobotInterface):
         self.last_mission_id: str | None = None
         self.is_return_home_mission: bool = False
 
+        # Set when the robot is confirmed docked and kept until it is seen in another state
+        # than idle. Tells an idle robot that dropped out of the dock from one that is
+        # idle elsewhere
+        self._was_previous_state_docked: bool = False
+
         self.map_handler = MapHandler()
         self.robot_api: API = API(request_handler=RequestHandler())
         self.taurob_arm: TaurobArm = TaurobArm(settings.ROBOT_NUMBER_OF_JOINTS)
@@ -180,6 +185,41 @@ class Robot(RobotInterface):
         if self.telemetry.get_robot_state() != "docked":
             return False
 
+        self._was_previous_state_docked = True
+        return True
+
+    def _is_redocking(self) -> bool:
+        """Whether the robot has dropped out of the dock and is expected back by itself.
+
+        The robot may only be idle for a limited time before it starts redocking. The
+        time is taken from when the robot last changed its state.
+        """
+        state: str
+        seconds_in_state: float | None
+        state, seconds_in_state = self.telemetry.get_robot_state_and_duration()
+
+        if state == "redocking":
+            self._was_previous_state_docked = False
+            return True
+
+        if not self._was_previous_state_docked:
+            return False
+
+        if state != "idle":
+            self._was_previous_state_docked = False
+            return False
+
+        if seconds_in_state is None:
+            return False
+
+        if seconds_in_state >= settings.ROBOT_REDOCK_IDLE_GRACE_SECONDS:
+            self._was_previous_state_docked = False
+            self.logger.warning(
+                f"Robot has been idle for {seconds_in_state:.0f} seconds after being "
+                f"docked without redocking. No longer treating the robot as home."
+            )
+            return False
+
         return True
 
     def _get_is_localization_running(self) -> bool:
@@ -231,6 +271,11 @@ class Robot(RobotInterface):
                 "Robot is in remote stop mode. Cannot initiate mission."
             )
 
+        if self._is_redocking():
+            raise RobotInfeasibleMissionException(
+                "Robot is redocking. Cannot initiate mission."
+            )
+
         if not self._get_is_localization_running() and not self._get_is_docked():
             raise RobotInfeasibleMissionException(
                 "Robot localization is not running, nor is the robot docked. Cannot initiate mission."
@@ -264,6 +309,11 @@ class Robot(RobotInterface):
             f"Starting initiate mission for return home with id {mission_id} and resetting previous instance_id"
         )
         self.instance_id = None
+
+        if self._is_redocking():
+            raise RobotAlreadyHomeException(
+                "Robot is redocking by itself. Disregarding initiate of return to home mission."
+            )
 
         if self._is_robot_home():
             raise RobotAlreadyHomeException(
@@ -562,7 +612,7 @@ class Robot(RobotInterface):
         if self.telemetry.get_robot_remote_stop():
             return RobotStatus.TeleOperation
 
-        if self._get_is_docked():
+        if self._get_is_docked() or self._is_redocking():
             return RobotStatus.Home
 
         if self.robot_api.get_scheduled_actions(settings.ROBOT_NAME):

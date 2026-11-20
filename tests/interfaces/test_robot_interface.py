@@ -1,20 +1,24 @@
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 import pytest
 from pytest_mock import MockerFixture
 from robot_interface.models.exceptions.robot_exceptions import (
+    RobotAlreadyHomeException,
     RobotDockingStatusMismatchException,
     RobotInfeasibleMissionException,
 )
 from robot_interface.models.inspection.inspection import Inspection
 from robot_interface.models.mission.mission import Mission
+from robot_interface.models.mission.status import RobotStatus
 from robot_interface.models.mission.task import TakeImage, TakeThermalVideo, TaskStatus
 
 from isar_taurob.config import settings
 from isar_taurob.robot.api.api import API
 from isar_taurob.robot.api.sensor import SensorName, SensorValue
 from isar_taurob.robotinterface import Robot
+from tests.conftest import build_snapshot
 from tests.utilities.mock_api_return_values.mock_api import MockAPI
 from tests.utilities.mock_api_return_values.mock_taurob_api import MockTaurobAPI
 from tests.utilities.mock_models.mock_robot_variables import mock_pose, mock_target
@@ -284,3 +288,115 @@ def test_initiate_return_home_throws_unreliable_docking_status_exception(
     # Act and Assert
     with pytest.raises(RobotDockingStatusMismatchException):
         robot.initiate_return_home("00000000-0000-0000-0000-000000000000")
+
+
+@pytest.fixture()
+def no_sleep(mocker: MockerFixture) -> mock.MagicMock:
+    return mocker.patch("isar_taurob.robotinterface.time")
+
+
+@pytest.fixture()
+def scheduled_actions(mocker: MockerFixture) -> mock.MagicMock:
+    return mocker.patch.object(API, "get_scheduled_actions", return_value=[])
+
+
+@pytest.fixture()
+def set_robot_state(
+    robot: Robot,
+    mocked_sensors: mock.MagicMock,
+    sensor_overrides: dict,
+    scheduled_actions: mock.MagicMock,
+    no_sleep: mock.MagicMock,
+) -> Callable[..., None]:
+    """Makes the robot online and returns a function updating the robot state."""
+    robot.telemetry.last_update_from_robot = datetime.now(UTC)
+    seconds_in_state: float = 0.0
+
+    def _snapshot() -> dict[str, SensorValue]:
+        snapshot = build_snapshot(**sensor_overrides)
+        snapshot[SensorName.ROBOT_STATE].changed = datetime.now(UTC) - timedelta(
+            seconds=seconds_in_state
+        )
+        return snapshot
+
+    mocked_sensors.side_effect = _snapshot
+
+    def _set_robot_state(state: str, seconds: float = 0.0) -> None:
+        nonlocal seconds_in_state
+        seconds_in_state = seconds
+        sensor_overrides[SensorName.ROBOT_STATE] = state
+        robot.telemetry.invalidate_sensor_cache()
+
+    return _set_robot_state
+
+
+@pytest.fixture()
+def robot_dropped_from_dock(
+    docked_robot: Robot, set_robot_state: Callable[..., None]
+) -> Robot:
+    """A robot that was docked and has just been reported as idle."""
+    assert docked_robot.robot_status() == RobotStatus.Home
+    set_robot_state("idle")
+    return docked_robot
+
+
+def test_robot_status_is_home_while_redocking(
+    robot_dropped_from_dock: Robot, set_robot_state: Callable[..., None]
+) -> None:
+    robot: Robot = robot_dropped_from_dock
+    statuses: list[RobotStatus] = []
+
+    for state, seconds_in_state in [
+        ("idle", settings.ROBOT_REDOCK_IDLE_GRACE_SECONDS - 5),
+        ("redocking", 0),
+        ("redocking", 3600),
+        ("docked", 0),
+    ]:
+        set_robot_state(state, seconds_in_state)
+        statuses.append(robot.robot_status())
+
+    assert statuses == [RobotStatus.Home] * 4
+
+
+def test_robot_status_is_not_home_when_idle_too_long_after_docked(
+    robot_dropped_from_dock: Robot, set_robot_state: Callable[..., None]
+) -> None:
+    set_robot_state("idle", settings.ROBOT_REDOCK_IDLE_GRACE_SECONDS + 1)
+
+    assert robot_dropped_from_dock.robot_status() == RobotStatus.Available
+
+
+def test_robot_status_is_not_home_when_idle_without_having_been_docked(
+    robot: Robot, set_robot_state: Callable[..., None]
+) -> None:
+    set_robot_state("idle")
+
+    assert robot.robot_status() == RobotStatus.Available
+
+
+def test_robot_status_is_not_home_when_idle_after_failed_redocking(
+    robot_dropped_from_dock: Robot, set_robot_state: Callable[..., None]
+) -> None:
+    robot: Robot = robot_dropped_from_dock
+    set_robot_state("redocking")
+    assert robot.robot_status() == RobotStatus.Home
+
+    set_robot_state("idle")
+
+    assert robot.robot_status() == RobotStatus.Available
+
+
+def test_initiate_mission_is_rejected_while_redocking(
+    robot_dropped_from_dock: Robot,
+) -> None:
+    with pytest.raises(RobotInfeasibleMissionException, match="redocking"):
+        robot_dropped_from_dock.initiate_mission(take_image_mission())
+
+
+def test_initiate_return_home_is_disregarded_while_redocking(
+    robot_dropped_from_dock: Robot, sensor_overrides: dict
+) -> None:
+    sensor_overrides[SensorName.LOCALIZATION_RUNNING] = False
+
+    with pytest.raises(RobotAlreadyHomeException):
+        robot_dropped_from_dock.initiate_return_home("mission_id")
