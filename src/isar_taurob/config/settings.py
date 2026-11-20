@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     # Delay to give enough time for the robot position to update itself
     ROBOT_INITIATE_MISSION_DELAY: int = Field(default=5)
 
+    ROBOT_REDOCK_IDLE_GRACE_SECONDS: float = Field(default=20)
+
     # ID for the mission definition we amend to create a full mission
     MISSION_ID: int = Field(default=3)
 
