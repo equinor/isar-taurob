@@ -206,6 +206,16 @@ class TaurobTelemetry:
     def get_robot_state(self) -> str:
         return self._get_value(SensorName.ROBOT_STATE)
 
+    def get_robot_state_and_duration(self) -> tuple[str, float | None]:
+        """The robot state and the seconds since the robot entered it, if known."""
+        sensor: SensorValue = self._get_sensor(SensorName.ROBOT_STATE)
+        if sensor.changed is None:
+            return sensor.value, None
+        duration: datetime.timedelta = (
+            datetime.datetime.now(datetime.UTC) - sensor.changed
+        )
+        return sensor.value, duration.total_seconds()
+
     def get_robot_remote_stop(self) -> bool:
         return bool(self._get_value(SensorName.REMOTE_STOP))
 

@@ -84,6 +84,13 @@ class Settings(BaseSettings):
     # Delay to give enough time for the robot position to update itself
     ROBOT_INITIATE_MISSION_DELAY: int = Field(default=5)
 
+    # The robot redocks on its own if the docking station drops out, e.g. on loss of
+    # power. The robot state then goes "docked" -> "idle" -> "redocking" -> "docked",
+    # and the robot is still reported as home while it is "redocking".
+    # Seconds the robot may be "idle" after "docked" and still be reported as home,
+    # counted from when the robot changed its state
+    ROBOT_REDOCK_IDLE_GRACE_SECONDS: float = Field(default=30)
+
     # ID for the mission definition we amend to create a full mission
     MISSION_ID: int = Field(default=3)
 
