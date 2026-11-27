@@ -5,6 +5,7 @@ import logging
 import math
 import threading
 import time
+from collections.abc import Callable
 from logging import Logger
 from typing import Any
 
@@ -55,6 +56,18 @@ class TaurobTelemetry:
         self._next_refresh: float = 0.0
         self._refresh_error: RobotException | None = None
         self._sensor_cache_lock: threading.RLock = threading.RLock()
+        self._last_pose_received_at: datetime.datetime | None = None
+        self._pose_listeners: list[Callable[[PoseSnapshot], None]] = []
+        self._pose_listeners_lock: threading.Lock = threading.Lock()
+
+    def add_pose_listener(self, listener: Callable[[PoseSnapshot], None]) -> None:
+        with self._pose_listeners_lock:
+            if listener not in self._pose_listeners:
+                self._pose_listeners.append(listener)
+
+    def remove_pose_listener(self, listener: Callable[[PoseSnapshot], None]) -> None:
+        with self._pose_listeners_lock, contextlib.suppress(ValueError):
+            self._pose_listeners.remove(listener)
 
     def invalidate_sensor_cache(self) -> None:
         """Force the next read to fetch a fresh snapshot."""
@@ -66,6 +79,8 @@ class TaurobTelemetry:
         always return the same sensors, so missing ones keep their last value.
         A failure is kept until the next refresh so concurrent readers don't
         all retry the request."""
+        pose_sensor: SensorValue | None = None
+        received_at: datetime.datetime | None = None
         with self._sensor_cache_lock:
             self._next_refresh = time.monotonic() + settings.SENSOR_REFRESH_INTERVAL
             try:
@@ -83,10 +98,17 @@ class TaurobTelemetry:
                 self._refresh_error = e
                 raise
 
+            received_at = datetime.datetime.now(datetime.UTC)
             self._refresh_error = None
             self._sensor_cache.update(snapshot)
             for sensor in snapshot.values():
                 self._record_robot_update(sensor)
+            pose_sensor = snapshot.get(SensorName.POSE_BASE)
+            if pose_sensor is not None:
+                self._last_pose_received_at = received_at
+
+        if pose_sensor is not None and received_at is not None:
+            self._notify_pose_listeners(pose_sensor, received_at)
 
     def _record_robot_update(self, sensor: SensorValue) -> datetime.datetime | None:
         if sensor.changed is not None:
@@ -154,15 +176,53 @@ class TaurobTelemetry:
             self.logger.exception(error_description)
             raise RobotAPIException(error_description=error_description)
 
-    def get_robot_pose_snapshot(self) -> PoseSnapshot:
-        sensor = self._get_sensor(SensorName.POSE_BASE)
+    @staticmethod
+    def _parse_pose_snapshot(
+        sensor: SensorValue, received_at: datetime.datetime | None = None
+    ) -> PoseSnapshot:
         try:
             snapshot = PoseSnapshot.model_validate_json(sensor.value)
         except (TypeError, ValueError) as e:
             raise RobotAPIException(
                 error_description=f"Failed to decode pose.base snapshot: {e}"
             ) from e
-        return snapshot.model_copy(update={"changed": sensor.changed})
+        return snapshot.model_copy(
+            update={"changed": sensor.changed, "received_at": received_at}
+        )
+
+    def _notify_pose_listeners(
+        self, sensor: SensorValue, received_at: datetime.datetime
+    ) -> None:
+        with self._pose_listeners_lock:
+            listeners = list(self._pose_listeners)
+        if not listeners:
+            return
+        try:
+            snapshot = self._parse_pose_snapshot(sensor, received_at)
+        except RobotAPIException as e:
+            self.logger.warning(f"Skipping pose listener notification: {e.error_description}")
+            return
+        for listener in listeners:
+            try:
+                listener(snapshot)
+            except Exception:  # noqa: BLE001 - listener failures must not affect telemetry.
+                self.logger.warning("Pose listener raised an unexpected error")
+
+    def get_robot_pose_snapshot(self) -> PoseSnapshot:
+        sensor = self._get_sensor(SensorName.POSE_BASE)
+        return self._parse_pose_snapshot(sensor, self._last_pose_received_at)
+
+    def get_cached_pose_snapshot(self) -> PoseSnapshot | None:
+        """Return the last cached pose snapshot without triggering an API refresh."""
+        with self._sensor_cache_lock:
+            sensor = self._sensor_cache.get(SensorName.POSE_BASE)
+            received_at = self._last_pose_received_at
+        if sensor is None:
+            return None
+        try:
+            return self._parse_pose_snapshot(sensor, received_at)
+        except RobotAPIException:
+            return None
 
     def get_robot_pose_confidence(self) -> float | None:
         """Return the last reported localization confidence from cached pose.base."""

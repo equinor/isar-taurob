@@ -261,3 +261,24 @@ def test_refresh_records_last_robot_update_time(telemetry_service, mocker):
         sensor.changed for sensor in snapshot.values() if sensor.changed is not None
     )
     assert telemetry_service.last_update_from_robot == newest
+
+
+def test_pose_listener_receives_snapshot_without_extra_api_calls(
+    telemetry_service, mocker
+):
+    received = []
+    failing = mocker.Mock(side_effect=RuntimeError("boom"))
+    telemetry_service.add_pose_listener(failing)
+    telemetry_service.add_pose_listener(received.append)
+
+    get_all = _prime(telemetry_service, mocker)
+
+    assert get_all.call_count == 1
+    assert len(received) == 1
+    assert received[0].floor == "test_map"
+    assert received[0].received_at is not None
+    assert received[0].changed is not None
+
+    telemetry_service.remove_pose_listener(received.append)
+    telemetry_service.refresh_sensor_cache()
+    assert len(received) == 1

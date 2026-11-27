@@ -6,18 +6,20 @@ from datetime import UTC, datetime
 from pathlib import Path
 from time import monotonic
 
-from robot_interface.recording_models import RecordingGap
+from robot_interface.recording_models import RecordingGap, SegmentTiming
 from robot_interface.recording_publisher import RecordingArtifact, RecordingPublisher
 
 from isar_taurob.robot.recording.ffmpeg import (
     concatenate_segments,
     convert_segment,
+    probe_video_duration,
     validate_video,
 )
 from isar_taurob.robot.recording.models import (
     DriverCameraRecording,
     DriverRecordingSession,
 )
+from isar_taurob.robot.recording.pose_collector import load_pose_samples
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +49,9 @@ class SessionFinalizer:
         previous_status = session.status
         for camera in session.cameras.values():
             await self._finalize_camera_recording(session, camera, directory)
+        pose_samples = load_pose_samples(directory)
+        if pose_samples is not None:
+            session.pose_samples = pose_samples
         session.status = (
             "Ready"
             if session.cameras
@@ -96,8 +101,11 @@ class SessionFinalizer:
             converted = await self._convert_segments(
                 session, camera, directory, passthrough
             )
+            segment_timings = await self._build_segment_timings(camera, converted)
             stage = "concatenation"
-            final = await self._combine_segments(converted, directory, camera.key)
+            final = await self._combine_segments(
+                [path for _, path in converted], directory, camera.key
+            )
             stage = "upload"
             reference = await self.publisher.publish_video(
                 session.run_id,
@@ -110,6 +118,7 @@ class SessionFinalizer:
             )
             camera.status = "Ready"
             camera.artifact_reference = reference
+            camera.segment_timings = segment_timings
             camera.bytes = final.stat().st_size
             camera.finalization_mode = "remuxed" if passthrough else "transcoded"
             camera.error = None
@@ -147,9 +156,9 @@ class SessionFinalizer:
         camera: DriverCameraRecording,
         directory: Path,
         passthrough: bool,
-    ) -> list[Path]:
+    ) -> list[tuple[int, Path]]:
         """Convert and validate nonempty segments, recording gaps for corrupt footage."""
-        converted = []
+        converted: list[tuple[int, Path]] = []
         for segment in sorted(directory.glob(f"{camera.key}-*.mkv")):
             if not segment.stat().st_size:
                 continue
@@ -162,12 +171,39 @@ class SessionFinalizer:
                     rotation_degrees=camera.capture_metadata.rotation_degrees % 360,
                 )
                 await validate_video(output)
-                converted.append(output)
+                converted.append((self._segment_index_from_path(segment), output))
             except RuntimeError:
                 self._record_segment_gap(session, segment)
         if not converted:
             raise RuntimeError("No decodable footage")
         return converted
+
+    @staticmethod
+    def _segment_index_from_path(segment: Path) -> int:
+        return int(segment.stem.rsplit("-", 1)[1])
+
+    @staticmethod
+    async def _build_segment_timings(
+        camera: DriverCameraRecording, converted: list[tuple[int, Path]]
+    ) -> list[SegmentTiming]:
+        first_frames = {
+            segment.segment_index: segment.first_frame_at
+            for segment in camera.recorded_segments
+        }
+        timings: list[SegmentTiming] = []
+        video_offset = 0.0
+        for segment_index, path in converted:
+            duration = await probe_video_duration(path)
+            timings.append(
+                SegmentTiming(
+                    segment_index=segment_index,
+                    video_start_seconds=video_offset,
+                    duration_seconds=duration,
+                    capture_start_at=first_frames.get(segment_index),
+                )
+            )
+            video_offset += duration
+        return timings
 
     @staticmethod
     def _record_segment_gap(session: DriverRecordingSession, segment: Path) -> None:

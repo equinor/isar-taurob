@@ -1,6 +1,8 @@
 """Asynchronous FFmpeg execution for Taurob recording finalization."""
 
 import asyncio
+import json
+import math
 from pathlib import Path
 
 from isar_taurob.robot.recording.subprocess_utils import create_nice_subprocess
@@ -68,6 +70,49 @@ async def concatenate_segments(manifest: Path, output: Path) -> None:
 async def validate_video(path: Path) -> None:
     """Decode the complete video and fail on decoding errors."""
     await _execute_ffmpeg("-xerror", "-i", str(path), "-f", "null", "-")
+
+
+async def probe_video_duration(path: Path) -> float:
+    """Return the video's duration in seconds using ffprobe."""
+    process = await create_nice_subprocess(
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=duration:format=duration",
+        "-of",
+        "json",
+        str(path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, _ = await asyncio.wait_for(process.communicate(), 60)
+    except BaseException:
+        process.kill()
+        await process.wait()
+        raise
+    if process.returncode:
+        raise RuntimeError("Video duration probe failed")
+    return _parse_probed_duration(stdout)
+
+
+def _parse_probed_duration(stdout: bytes) -> float:
+    payload = json.loads(stdout.decode("utf-8"))
+    streams = payload.get("streams") or []
+    candidates = [
+        streams[0].get("duration") if streams else None,
+        (payload.get("format") or {}).get("duration"),
+    ]
+    for raw in candidates:
+        if raw is None or raw == "N/A":
+            continue
+        duration = float(raw)
+        if math.isfinite(duration) and duration >= 0:
+            return duration
+    raise RuntimeError("Video duration unavailable")
 
 
 async def _execute_ffmpeg(*arguments: str) -> None:

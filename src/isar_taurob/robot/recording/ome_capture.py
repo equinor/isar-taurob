@@ -136,8 +136,8 @@ class _OMEStreamReceiver:
         allocated = asyncio.run_coroutine_threadsafe(
             self._allocate_segment(codec), self.loop
         ).result(timeout=SEGMENT_ALLOCATION_TIMEOUT)
-        self._attach_recording_branch(pad, codec, allocated)
-        pad.add_probe(self.gst.PadProbeType.BUFFER, self._track_received_packet)
+        probe_pad = self._attach_recording_branch(pad, codec, allocated)
+        probe_pad.add_probe(self.gst.PadProbeType.BUFFER, self._track_received_packet)
 
     def _discard_media_pad(self, pad: Any) -> None:
         """Consume non-video media so it cannot block the WebRTC pipeline."""
@@ -146,10 +146,11 @@ class _OMEStreamReceiver:
         sink.sync_state_with_parent()
         pad.link(sink.get_static_pad("sink"))
 
-    def _attach_recording_branch(self, pad: Any, codec: str, path: Path) -> None:
+    def _attach_recording_branch(self, pad: Any, codec: str, path: Path) -> Any:
         """Depayload encoded video into recoverable one-second Matroska clusters."""
         branch = self.gst.parse_bin_from_description(
             f"queue ! {CODEC_CHAINS[codec]} ! "
+            "identity name=frame_tap ! "
             "matroskamux streamable=true max-cluster-duration=1000000000 ! "
             f'filesink location="{path}"',
             True,
@@ -157,6 +158,8 @@ class _OMEStreamReceiver:
         self.pipeline.add(branch)
         branch.sync_state_with_parent()
         pad.link(branch.get_static_pad("sink"))
+        frame_tap = branch.get_by_name("frame_tap")
+        return frame_tap.get_static_pad("src") if frame_tap is not None else pad
 
     def _track_received_packet(self, *_args: Any) -> Any:
         """Track native packet arrival and announce the first packet on asyncio."""
