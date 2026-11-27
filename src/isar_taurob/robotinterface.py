@@ -33,7 +33,7 @@ from robot_interface.models.mission.task import (
 from robot_interface.models.robots.battery_state import BatteryState
 from robot_interface.models.robots.media import MediaConfig
 from robot_interface.recording_publisher import RecordingPublisher
-from robot_interface.robot_interface import RobotInterface
+from robot_interface.robot_interface import Polygon, RobotInterface
 from robot_interface.telemetry.mqtt_client import TelemetryParameters
 from robot_interface.telemetry.payloads import (
     TelemetryBatteryPayload,
@@ -53,6 +53,7 @@ from isar_taurob.robot.media import create_ome_media_config
 from isar_taurob.robot.recording.mission_recorder import TaurobMissionRecorder
 from isar_taurob.robot.recording.ome_capture import capture_ome
 from isar_taurob.robot.scheduler.scheduler import Scheduler
+from isar_taurob.robot.storage.blob_storage import BlobStorage
 from isar_taurob.robot.storage.storage import Storage
 from isar_taurob.robot.taurob_model.arm import TaurobArm
 from isar_taurob.robot.taurob_model.inspection_tuple import ActionTaskTuple
@@ -97,6 +98,7 @@ class Robot(RobotInterface):
             robot_api=self.robot_api,
             robot_telemetry=self.telemetry,
         )
+        self.blob_storage: BlobStorage = BlobStorage()
 
         self.logger: Logger = logging.getLogger(settings.LOGGER_NAME)
 
@@ -704,3 +706,26 @@ class Robot(RobotInterface):
 
     def get_battery_level(self) -> float:
         return self.telemetry.last_battery_measurement
+
+    def update_exclusion_polygons(self, polygons: list[Polygon]) -> None:
+        cost_maps: dict[str, bytes] = {}
+        for polygon in polygons:
+            robot_polygons, map_name = self.map_handler.transform_polygon_to_robot(
+                polygon
+            )
+            if map_name not in cost_maps:
+                try:
+                    cost_maps[map_name] = self.blob_storage.download_cost_map(
+                        settings.ASSET_SHORT_NAME, map_name
+                    )
+                except Exception as e:
+                    raise RobotCommunicationException(
+                        error_description=f"Failed to download cost map for {map_name}: {e}"
+                    )
+
+            # TODO: draw the polygon onto the cost map
+
+        for map_name, cost_map in cost_maps.items():
+            # TODO: upload updated cost map to taurob API
+            pass
+        return
