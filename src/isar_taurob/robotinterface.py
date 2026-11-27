@@ -70,6 +70,8 @@ class Robot(RobotInterface):
             partial(capture_ome, self.generate_media_config),
             publisher,
             directory=settings.RECORDING_DATA_DIRECTORY,
+            telemetry=self.telemetry,
+            map_handler=self.map_handler,
         )
 
     def __init__(self, robot_name: str, isar_id: str) -> None:

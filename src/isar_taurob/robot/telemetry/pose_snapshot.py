@@ -7,8 +7,10 @@ class PoseSnapshot(BaseModel):
     x: FiniteFloat
     y: FiniteFloat
     theta: FiniteFloat
+    floor: str | None = None
     confidence: FiniteFloat | None = Field(default=None, ge=0, le=1)
     changed: datetime.datetime | None = None
+    received_at: datetime.datetime | None = None
 
     @field_validator("x", "y", "theta", "confidence", mode="before")
     @classmethod

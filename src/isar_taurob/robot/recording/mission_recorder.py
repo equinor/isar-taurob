@@ -8,17 +8,25 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from robot_interface.mission_recording import MissionRecorder
-from robot_interface.recording_models import RecordingGap
+from robot_interface.recording_models import PoseSample, RecordingGap
 from robot_interface.recording_publisher import RecordingPublisher
 
+from isar_taurob.robot.map.map_handler import MapHandler
 from isar_taurob.robot.recording.models import (
     CameraEvent,
     Capture,
     CaptureMetadata,
     DriverCameraRecording,
     DriverRecordingSession,
+    RecordedSegment,
+)
+from isar_taurob.robot.recording.pose_collector import (
+    append_pose_sample,
+    pose_snapshot_to_sample,
 )
 from isar_taurob.robot.recording.session_finalizer import SessionFinalizer
+from isar_taurob.robot.telemetry.pose_snapshot import PoseSnapshot
+from isar_taurob.robot.telemetry.taurob_telemetry import TaurobTelemetry
 
 logger = logging.getLogger(__name__)
 
@@ -30,17 +38,24 @@ def timestamp() -> str:
 class TaurobMissionRecorder(MissionRecorder):
     """A driver's single background loop owns all metadata and media callbacks."""
 
+    telemetry: TaurobTelemetry | None = None
+    map_handler: MapHandler | None = None
+
     def __init__(
         self,
         capture: Capture,
         publisher: RecordingPublisher,
         *,
         directory: Path,
+        telemetry: TaurobTelemetry | None = None,
+        map_handler: MapHandler | None = None,
     ) -> None:
         """Initialize durable recording storage and start the background event loop."""
         self.capture = capture
         self.publisher = publisher
         self.directory = directory
+        self.telemetry = telemetry
+        self.map_handler = map_handler
         self.directory.mkdir(parents=True, exist_ok=True)
         self.sessions: dict[str, DriverRecordingSession] = {}
         self.workers: dict[str, tuple[asyncio.Event, asyncio.Task[None]]] = {}
@@ -53,6 +68,8 @@ class TaurobMissionRecorder(MissionRecorder):
         self.thread.start()
         if not self.ready.wait(5):
             raise RuntimeError("Recording loop did not start")
+        if self.telemetry is not None and self.map_handler is not None:
+            self.telemetry.add_pose_listener(self._on_pose_snapshot)
 
     def start(self, mission_id: str, mission_name: str) -> None:
         """Schedule mission recording on the background loop from any thread."""
@@ -64,6 +81,8 @@ class TaurobMissionRecorder(MissionRecorder):
 
     def close(self) -> None:
         """Request bounded recorder shutdown and stop its background thread."""
+        if self.telemetry is not None:
+            self.telemetry.remove_pose_listener(self._on_pose_snapshot)
         if not self.thread.is_alive():
             return
         future = asyncio.run_coroutine_threadsafe(self._shutdown(), self.loop)
@@ -125,6 +144,38 @@ class TaurobMissionRecorder(MissionRecorder):
         """Publish the current session snapshot through the platform publisher."""
         await self.publisher.publish_session(session)
 
+    def _on_pose_snapshot(self, snapshot: PoseSnapshot) -> None:
+        if (
+            self.closing
+            or not self.workers
+            or self.map_handler is None
+            or not self.loop.is_running()
+        ):
+            return
+        sample = pose_snapshot_to_sample(snapshot, self.map_handler)
+        if sample is None:
+            return
+        try:
+            self.loop.call_soon_threadsafe(self._record_pose_sample, sample)
+        except RuntimeError:
+            return
+
+    def _record_pose_sample(self, sample: PoseSample) -> None:
+        for run_id in self.workers:
+            session = self.sessions.get(run_id)
+            if session is not None and session.ended_at is None:
+                append_pose_sample(self._session_directory(session), sample)
+
+    def _record_initial_cached_pose(self, session: DriverRecordingSession) -> None:
+        if self.telemetry is None or self.map_handler is None:
+            return
+        cached = self.telemetry.get_cached_pose_snapshot()
+        if cached is None:
+            return
+        sample = pose_snapshot_to_sample(cached, self.map_handler)
+        if sample is not None:
+            append_pose_sample(self._session_directory(session), sample)
+
     def _start_session(self, mission_id: str, mission_name: str) -> None:
         """Create and launch capture unless the mission is active or already ended."""
         if self.closing or mission_id in self.workers:
@@ -142,6 +193,7 @@ class TaurobMissionRecorder(MissionRecorder):
         )
         self.sessions[mission_id] = session
         self._persist(session)
+        self._record_initial_cached_pose(session)
         stop = asyncio.Event()
         task = asyncio.create_task(self._capture_session(session, stop))
         self.workers[mission_id] = (stop, task)
@@ -184,6 +236,9 @@ class TaurobMissionRecorder(MissionRecorder):
             recording.apply_metadata(metadata)
             recording.status = "Recording"
             recording.segments += 1
+            recording.recorded_segments.append(
+                RecordedSegment(segment_index=recording.segments)
+            )
             recording.events.append(CameraEvent(type="started", at=timestamp()))
             logger.debug(
                 "Recording segment opened mission_id=%s camera_id=%s segment=%s codec=%s",
@@ -203,14 +258,24 @@ class TaurobMissionRecorder(MissionRecorder):
         def update_camera(camera: str, metadata: CaptureMetadata) -> None:
             """Apply capture metadata and mark the camera's first frame arrival."""
             recording = session.cameras[camera]
+            now = timestamp()
+            segment_updated = False
             if recording.first_frame_at is None:
-                recording.first_frame_at = timestamp()
+                recording.first_frame_at = now
                 logger.info(
                     "First recording footage received mission_id=%s camera_id=%s",
                     session.run_id,
                     camera,
                 )
+            if (
+                recording.recorded_segments
+                and recording.recorded_segments[-1].first_frame_at is None
+            ):
+                recording.recorded_segments[-1].first_frame_at = now
+                segment_updated = True
             recording.apply_metadata(metadata)
+            if segment_updated:
+                self._persist(session)
 
         try:
             while not stop.is_set():

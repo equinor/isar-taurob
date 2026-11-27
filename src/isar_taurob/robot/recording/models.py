@@ -27,10 +27,16 @@ class CameraEvent(RecordingModel):
     at: str
 
 
+class RecordedSegment(RecordingModel):
+    segment_index: int
+    first_frame_at: str | None = None
+
+
 class DriverCameraRecording(CameraRecording):
     capture_metadata: CaptureMetadata = Field(default_factory=CaptureMetadata)
     finalization_started: bool = False
     segments: int = 0
+    recorded_segments: list[RecordedSegment] = Field(default_factory=list)
     events: list[CameraEvent] = Field(default_factory=list)
     first_frame_at: str | None = None
     bytes: int | None = None

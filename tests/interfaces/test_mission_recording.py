@@ -1,16 +1,22 @@
 import asyncio
+import threading
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from robot_interface.recording_models import SegmentTiming
 
+from isar_taurob.robot.api.api import API
 from isar_taurob.robot.recording.mission_recorder import TaurobMissionRecorder
 from isar_taurob.robot.recording.models import (
     CaptureMetadata,
     DriverCameraRecording,
     DriverRecordingSession,
+    RecordedSegment,
 )
+from isar_taurob.robot.recording.pose_collector import POSE_LOG_FILENAME
 from isar_taurob.robot.recording.session_finalizer import SessionFinalizer
+from tests.conftest import build_snapshot
 
 
 @pytest.fixture
@@ -79,6 +85,10 @@ def finalization(tmp_path, mocker):
         )
     mocker.patch(
         "isar_taurob.robot.recording.session_finalizer.validate_video", new=AsyncMock()
+    )
+    mocker.patch(
+        "isar_taurob.robot.recording.session_finalizer.probe_video_duration",
+        new=AsyncMock(return_value=10.0),
     )
     (tmp_path / "session.json").write_text("{}")
     (tmp_path / "front-00001.mkv").write_bytes(b"footage")
@@ -221,3 +231,148 @@ def test_maintenance_only_finalizes_inactive_sessions(recorder, active):
     assert session.status == "Processing"
     assert (directory / "session.json").exists()
     assert recorder._finalize.await_count == int(not active)
+
+
+def test_finalization_builds_segment_timings_across_reconnect_and_dropped_segment(
+    tmp_path, mocker
+):
+    def convert_side_effect(source, output, **options):
+        if source.name == "front-00002.mkv":
+            raise RuntimeError("corrupt")
+        output.write_bytes(b"video")
+
+    mocker.patch(
+        "isar_taurob.robot.recording.session_finalizer.convert_segment",
+        new=AsyncMock(side_effect=convert_side_effect),
+    )
+    mocker.patch(
+        "isar_taurob.robot.recording.session_finalizer.concatenate_segments",
+        new=AsyncMock(side_effect=lambda _, output: output.write_bytes(b"video")),
+    )
+    mocker.patch(
+        "isar_taurob.robot.recording.session_finalizer.validate_video", new=AsyncMock()
+    )
+    mocker.patch(
+        "isar_taurob.robot.recording.session_finalizer.probe_video_duration",
+        new=AsyncMock(side_effect=[12.5, 8.0]),
+    )
+    for name in ("front-00001.mkv", "front-00002.mkv", "front-00003.mkv"):
+        (tmp_path / name).write_bytes(b"footage")
+    (tmp_path / "session.json").write_text("{}")
+
+    session = DriverRecordingSession(
+        run_id="mission",
+        status="Processing",
+        cameras={
+            "front": DriverCameraRecording(
+                camera_id="front",
+                key="front",
+                status="Processing",
+                capture_metadata=CaptureMetadata(source_codec="H264"),
+                recorded_segments=[
+                    RecordedSegment(
+                        segment_index=1,
+                        first_frame_at="2026-11-27T10:00:01+00:00",
+                    ),
+                    RecordedSegment(
+                        segment_index=2,
+                        first_frame_at="2026-11-27T10:00:20+00:00",
+                    ),
+                    RecordedSegment(
+                        segment_index=3,
+                        first_frame_at="2026-11-27T10:00:45+00:00",
+                    ),
+                ],
+            )
+        },
+    )
+    publisher = Mock(publish_video=AsyncMock(return_value="mission/front.mp4"))
+    finalizer = SessionFinalizer(publisher, Mock(), AsyncMock())
+
+    asyncio.run(finalizer.finalize_session(session, tmp_path))
+
+    assert session.cameras["front"].segment_timings == [
+        SegmentTiming(
+            segment_index=1,
+            video_start_seconds=0.0,
+            duration_seconds=12.5,
+            capture_start_at="2026-11-27T10:00:01+00:00",
+        ),
+        SegmentTiming(
+            segment_index=3,
+            video_start_seconds=12.5,
+            duration_seconds=8.0,
+            capture_start_at="2026-11-27T10:00:45+00:00",
+        ),
+    ]
+    assert any("front-00002.mkv" in gap.reason for gap in session.gaps)
+
+
+def test_recorder_attaches_passive_pose_samples_on_finalization(
+    tmp_path, telemetry_service, map_handler, mocker
+):
+    mocker.patch.object(
+        API, "get_all_sensor_values", return_value=build_snapshot()
+    )
+    telemetry_service.refresh_sensor_cache()
+
+    async def capture(stop, open_segment, update_camera):
+        segment = open_segment("front", CaptureMetadata(source_codec="H264"))
+        segment.write_bytes(b"footage")
+        update_camera("front", CaptureMetadata(last_frame_at=100.0))
+        telemetry_service.refresh_sensor_cache()
+        await asyncio.sleep(0.05)
+        stop.set()
+
+    mocker.patch(
+        "isar_taurob.robot.recording.session_finalizer.convert_segment",
+        new=AsyncMock(side_effect=lambda _, out, **__: out.write_bytes(b"video")),
+    )
+    mocker.patch(
+        "isar_taurob.robot.recording.session_finalizer.concatenate_segments",
+        new=AsyncMock(side_effect=lambda _, out: out.write_bytes(b"video")),
+    )
+    mocker.patch(
+        "isar_taurob.robot.recording.session_finalizer.validate_video", new=AsyncMock()
+    )
+    mocker.patch(
+        "isar_taurob.robot.recording.session_finalizer.probe_video_duration",
+        new=AsyncMock(return_value=5.0),
+    )
+
+    published_sessions = []
+    published_ready = threading.Event()
+
+    async def record_publish(session):
+        published_sessions.append(session.model_copy(deep=True))
+        if session.status == "Ready":
+            published_ready.set()
+
+    publisher = Mock(
+        publish_video=AsyncMock(return_value="mission/front.mp4"),
+        publish_session=AsyncMock(side_effect=record_publish),
+    )
+    recorder = TaurobMissionRecorder(
+        capture,
+        publisher,
+        directory=tmp_path,
+        telemetry=telemetry_service,
+        map_handler=map_handler,
+    )
+    try:
+        recorder.start("mission-1", "Inspection")
+        assert published_ready.wait(timeout=5)
+    finally:
+        recorder.close()
+
+    ready_sessions = [s for s in published_sessions if s.status == "Ready"]
+    assert ready_sessions
+    final_session = ready_sessions[-1]
+    assert final_session.pose_samples is not None
+    assert len(final_session.pose_samples) == 2
+    assert all(sample.map_name == "test_map" for sample in final_session.pose_samples)
+    assert final_session.cameras["front"].segment_timings is not None
+    assert len(final_session.cameras["front"].segment_timings) == 1
+    assert final_session.cameras["front"].segment_timings[0].capture_start_at is not None
+    session_dir = recorder._session_directory(final_session)
+    assert not (session_dir / POSE_LOG_FILENAME).exists()
