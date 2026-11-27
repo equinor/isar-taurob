@@ -4,6 +4,7 @@ from pathlib import Path
 
 from alitra import Bounds, Pose, Position
 from robot_interface.models.exceptions.robot_exceptions import RobotMapException
+from robot_interface.robot_interface import Polygon, Position2D
 
 from isar_taurob.config import settings
 from isar_taurob.robot.map.taurob_map import TaurobMap
@@ -155,4 +156,41 @@ class MapHandler:
         _map = self._select_map_by_name(name=pose.map_name)
         return _map.transform.transform_pose(
             pose=pose.to_pose(), from_=pose.to_pose().frame, to_=_map.map_asset.frame
+        )
+
+    def transform_polygon_to_robot(self, polygon: Polygon) -> tuple[Polygon, str]:
+        if self.last_used_map is None:
+            n_points = len(polygon.positions)
+            x_sum: float = sum([p.x for p in polygon.positions])
+            y_sum: float = sum([p.y for p in polygon.positions])
+            average_point = Position(
+                x=x_sum / n_points, y=y_sum / n_points, frame="asset"
+            )
+            _map = self.select_map_by_asset_position(position=average_point)
+        else:
+            _map = self.last_used_map
+
+        alitra_positions = [Position(p.x, p.y, 0.0, "asset") for p in polygon.positions]
+        robot_positions = [
+            _map.transform.transform_position(
+                positions=p, from_="asset", to_=_map.map_robot.frame
+            )
+            for p in alitra_positions
+        ]
+
+        z_max = _map.transform.transform_position(
+            positions=Position(0.0, 0.0, polygon.zmax),
+            from_="asset",
+            to_=_map.map_robot.frame,
+        ).z
+        z_min = _map.transform.transform_position(
+            positions=Position(0.0, 0.0, polygon.zmin),
+            from_="asset",
+            to_=_map.map_robot.frame,
+        ).z
+
+        updated_2d_positions = [Position2D(x=p.x, y=p.y) for p in robot_positions]
+        return (
+            Polygon(zmin=z_min, zmax=z_max, positions=updated_2d_positions),
+            _map.name,
         )
